@@ -1,0 +1,495 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r}
+library(dplyr)
+library(readr)
+library(tidyr)
+library(ggplot2)
+library(magrittr)
+library(corrplot)
+library(ggpubr)
+library(reshape)
+library(plotly)
+```
+
+Read the 2 main csv we need (progetto.csv,countries of the world.csv) and with merge unite in 1 main DATASER that we are calling "finalc")
+```{r}
+countries_of_the_world <- read_csv("DataFrame/countries of the world.csv")
+raw_table <- read_csv("DataFrame/progetto.csv")
+finalc <- merge(x= raw_table , y = countries_of_the_world, by ="Country") %>% arrange(Region)
+x3 <- unique(c2$Region) #not all the countries of the world were studied by hofstede here the list of all the specific country
+```
+
+
+```{r}
+#
+#
+#           
+#
+#
+
+```
+
+
+1)
+
+CASO GIAPPONESE ----> IL FATTORE DI MASCULINITA' PUO ESSERE UN FAVOREGGIAMENTO AL SUICIDIO?
+
+E' risaputo che il giappone abbia un problema dal punto di vista sociale, il paese del sol-levante (che nel 2019 è stato il secondo paese con il rateo di suicidi più alti) ha un'alto rateo di suicidi (in media 14.9 ogni 1000000) ed oltretutto il 70% circa dei sucidi totali coinvoglono persone che sono disoccupate.
+
+Andando a vedere le 6 dimensioni culturali del giappone notiamo che ha una mascolinità alta (95) e confrontando questo valore con gli altri valori nella regione asiatica il giappone spicca in termini di masculinità il che mi ha portato a domandarmi "la mascolinità è un fattore che favoreggia il suicidio
+
+
+
+(VALORI COME NA VERRANNO ELIMINATI DALLE MEDIE E PERCENTUALI IL CHE RENDE LO "STUDIO" DA NON INTENDERSI COME PRECISO AL 100%)
+
+
+
+
+
+
+
+1.1)    CREAZIONE DATAFRAME DI PARTENZA
+
+Oltre al dataset creato finalc (che diventerra suicidecase in questo studio) verrà utilizzato anche un dataset del WHO (World Healt Organizzation) che riporta per ogni anno il numero di suicidi (maschi e femmine hanno righe separate) e la popolazione di quell'anno (si va dal 1985 al 2015)
+
+```{r}
+suicidecase <-  finalc %>% select(Country,Region,M_INDEX)
+suicides_in_the_world <- read_csv("DataFrame/who_suicide_statistics.csv") #csv del Worl Healt Organizzation 
+```
+
+
+[per ogni sesso] Dal dataframe "suicides_in_the_world" vado a creare per ogni osservazione una colonna che indica la percentuale di suicidi in base alla popolazione, dopodiche per ogni stato vado a fare la media del numero e percentuali dei suicidi (togliendo i valori NA) 
+```{r}
+  #procedura per i maschi
+  suicide_M<-suicides_in_the_world %>% filter(sex=="male") %>%                        
+                            select(Country,suicides_no,population) %>% 
+                            mutate("suicide/population(%)"=(suicides_no/population)*100) %>% 
+                            select(-population) %>% 
+                            group_by(Country)  %>% 
+                            summarise(suicides_m=mean(suicides_no,na.rm=TRUE),percent_m=mean(`suicide/population(%)`,na.rm=TRUE)) %>% 
+                            arrange(-suicides_m)
+
+
+  #procedura per le femmine
+  suicide_F<-suicides_in_the_world %>% filter(sex=="female") %>% 
+                            select(Country,suicides_no,population) %>% 
+                            mutate("suicide/population(%)"=(suicides_no/population)*100) %>% 
+                            select(-population) %>% 
+                            group_by(Country)  %>% 
+                            summarise(suicides_f=mean(suicides_no,na.rm=TRUE),percent_f=mean(`suicide/population(%)`,na.rm=TRUE)) %>% 
+                            arrange(-suicides_f)
+```
+
+
+
+
+Dopodiche vado ad unire le due tabelle riguardanti maschi e femmine e poi ad unirlo assieme a "suicidecase" creando il nostro dataset "suicide_final" alla quale dopo andiamo ad aggiungere altri 2 valori il numero totale di suicidi e percentuale totale dei suicidi
+
+```{r}
+suicide_studies <- merge(x = suicide_M, y = suicide_F, by = "Country")
+suicide_final <- merge(x=suicidecase,y=suicide_studies,by = "Country")
+
+##dataset finale con numero e percentuali di suicidi uniti tra maschi e femmine
+suicide_final<- suicide_final %>% mutate(suicide_tot = suicides_m + suicides_f,percent_tot=percent_m+percent_f) %>% arrange(-suicide_tot)
+```
+
+
+1.2)    VISUALIZZAZIONE DATI
+
+Tramite questo grafico notiamo che la regione con una percentuale piu alta è la regione dei paesi baltici che se andiamo a notare nel HOFSTEDE DATA VISUALIZZATION la regione dei paesi baltici ha in media un M_INDEX molto basso il che va contro la nostra tesi
+```{r}
+    first_plot <- suicide_final %>% select(Region,percent_tot) %>% 
+                      group_by(Region) %>%
+                      ggplot(aes(x=Region,y=percent_tot)) + geom_boxplot()+ theme(axis.text.x=element_text(angle=90,hjust=1,vjust=0.5))
+
+      
+
+
+    ggplotly(first_plot)
+```
+
+Dopo questa prima analisi visiva andiamo a creare un plot con linea di tendenza dove nell'asse delle X mettiamo i valori del M_INDEX e nell'asse dell'Y le percentuali dei suicidi (ovviamente si lavora con le percentuali e non con i singoli valori)
+
+```{r}
+    
+    mod1 <- lm(data = suicide_final,percent_tot ~ M_INDEX)    
+    mod1$coefficients
+    #[PLOT]
+    suicide_final %>% ggplot(aes(M_INDEX,percent_tot)) + geom_point(mapping = aes(color = Region)) + geom_abline(intercept = mod1$coefficients[1],slope=mod1$coefficients[2],color="green")
+    
+    
+    
+    
+    
+    
+    
+    
+    suicide_final %>% ggplot(aes(M_INDEX,percent_tot)) + geom_point(mapping = aes(color = Region)) + geom_smooth()
+  zoom_plot <- suicide_final %>% filter(M_INDEX >= 47.09) %>%  ggplot(aes(M_INDEX,percent_tot)) + geom_point(mapping = aes(color = Region)) + geom_smooth()
+    
+    
+### test as proof there is no corellation  
+attach(suicide_final)
+cor(M_INDEX,percent_tot)
+    
+```
+Come possiamo notare, la linea di tendenza non ha un verso preciso e appare molto "casuale" il suo andamento il che implica che non ce un collegamento tra mascolinità-suicidi, il che porta la risposta alla nostra domanda ad un NO
+
+La mascolinità non è un fattore incisivo per l'andamento dei suicidi 
+(potrebbe, a prima vista esserlo visto che in zoom_plot ce un andamento verso l'alto apparente ma non è da prendere come vero perchè i valori, oltre ad essere meno numerosi rispetto al centro, sono anche etereogeni nel valore dell'asse Y)
+
+
+[APPROFONDIMENTO]
+
+Si puo ragionare sul perchè il giappone sia un caso apparte, rispetto alla macroregione alla quale appartiene (asiatica), riguardo al numero dei suicidi  ad esempio l'isolamento culturale che hanno avuto nell'arco della storia, problemi finanziari e di povertà che uniti alla pressione sociale (e quindi anche la mascolinità) portano a situazioni dove il singolo puo portarsi al suicidio.
+
+
+Alchè è vero, non è detto che più è alta la mascolinità e più il rateo di suicidi si alza, MA un fattore di mascolinità alto UNITO ad altri fattori sociali, culturali,economici[...] (come quelli di natura giapponese come esempio) puo portare a situazioni dove il rateo di suicidio aumenta
+
+
+
+(documentation about suicide in japan https://www.tokyoweekender.com/2017/08/suicide-in-japan-the-reasons-the-statistics-and-the-tell-support/)
+
+[FINE APPROFONDIMENTO]
+
+```{r}
+#
+#
+#        https://www.slideshare.net/RienieX/hofstede-39667048   
+#
+#
+
+```
+
+2)    
+
+Secondo la teoria di HOFSTEDE l'individualismo più è alto è più in quella cultura ce un focus sul singolo individuo rispetto al gruppo nella quale fa parte.
+
+Quindi se il valore della dimensione INDIVIDUALISMO è alto puo voler dire che anche il GDP sia piu alto rispetto a paesi dove INDIVIDUALISMO ha un valore più basso
+
+
+
+
+2.1)    VISUALIZZAZIONE DATI
+
+Vado a visualizzare i dati direttamente sul database "finalc" inserendo nell'asse delle X i valori di INV_INDEX e nell'asse delle Y i valori del GDP 
+
+[EXPECTED RESULT]
+Prendendo la nostra tesi (+ INV_INDEX = + GDP) come vera, dovremmo aspettarci dal grafico una linea di tendenza che divide in 2 il quadrante come una bisetrice, con una pendenza di (circa) 45 gradi    
+
+Nel caso non ottenessimo un grafico come quello descritto sopra vorrebbe dire che non c'è una diretta corellazione tra INDIVIDUALISMO e GDP
+
+```{r}  
+
+inv_df <- finalc %>%  select(Country,INV_INDEX,Region,`GDP ($ per capita)`) 
+
+inv_df %>%  ggplot(aes(INV_INDEX,`GDP ($ per capita)`)) + geom_point(mapping = aes(color = Region)) + geom_smooth()
+
+
+
+mod2 <- lm(data = finalc,`GDP ($ per capita)`~ INV_INDEX) 
+mod2$coefficients
+
+
+
+
+inv_plot <- inv_df %>%  ggplot(aes(INV_INDEX,`GDP ($ per capita)`,text =  paste("Country = ",inv_df$Country) )) + geom_point(mapping = aes(color = Region)) + geom_abline(intercept = mod2$coefficients[1],slope = mod2$coefficients[2],color="purple") + theme_minimal()
+
+
+
+ggplotly(inv_plot)
+```
+
+
+
+```{r}  
+
+attach(finalc)
+cor(INV_INDEX, `GDP ($ per capita)`)
+```
+
+Come possiamo notare [con entrambi i metodi] ce una corellazione netta tra INV_INDEX e GDP (di 0.68 circa) confermando la nostra tesi
+ma notando meglio il grafico (sopratutto con il metodo LOESS) si nota che il grafico ha due pendenze ben distinte che si differenziano circa nel punto dell'asse delle X di valore 30/40
+
+Visionando il summary di "finalc" si ricava la media di INV_INDEX globale che equivale a 37.08 che corrisponde circa a questo cambiamento di andamento da parte della linea di tendenza che andiamo a studiare nel punto 2.2
+
+
+
+
+2.2)    APPROFONDIMENTO DEL GRAFICO
+
+Per poter trarre delle conclusioni riguardo all'andamento di geom_smooth del grafico sopra facciamo due diversi zoom (valori >= media, valori < media) e andiamo a studiarne il modello lineare (utilizzo di geom_smooth(method="lm")) per ognuno dei 2 zoom
+
+
+(N.B. tengo a precisare che si parla sempre di valori medi ogni stato andrebbe poi preso ed analizzato a parte per lo scopo richiesto)
+
+```{r} 
+#valori minori della media di INV_INDEX
+finalc %>% filter(INV_INDEX<37.08)%>%   select(Country,INV_INDEX,Region,`GDP ($ per capita)`) %>%  ggplot(aes(INV_INDEX,`GDP ($ per capita)`)) + geom_point(mapping = aes(color = Region)) + geom_smooth(method="lm")
+
+#valori maggiori uguali della media di INV_INDEX
+finalc %>% filter(INV_INDEX>=37.08)%>%   select(Country,INV_INDEX,Region,`GDP ($ per capita)`) %>%  ggplot(aes(INV_INDEX,`GDP ($ per capita)`)) + geom_point(mapping = aes(color = Region)) + geom_smooth(method="lm")
+
+
+over_mean  <- finalc %>% filter(INV_INDEX>=37.08) 
+under_mean <- finalc %>% filter(INV_INDEX<37.08)
+
+
+
+
+corOM <- (cor(over_mean$INV_INDEX,over_mean$`GDP ($ per capita)`))^2
+corUM <- (cor(under_mean$INV_INDEX,under_mean$`GDP ($ per capita)`))^2
+
+
+corOM
+corUM
+```
+
+Come si puo vedere che stati diversi con INDIVIDUALISMO sotto la media hanno,in linea generale, una differenza minore di GDP mentre stati diversi ma con valori di INV_INDEX sopra alla media hanno differenze maggiori di GDP 
+
+Questo è dovuto alle diverse pendenze delle linee di tendenza dove più è alta la tendenza più la corellazione è forte 
+
+Per dimostrarlo prendiamo 2 regioni (1 con INV_INDEX >= 37.08, 1 con INV_INDEX < 37.08) e andiamo a vedere singolarmente la loro distribuzione (INV_INDEX - GDP) 
+
+
+
+[HO SCELTO NORTHEN AFRICA E WESTERN EUROPE]
+
+
+
+
+3)
+
+Long Term Orientation --->> Influenza sulle categorie di lavoro
+
+
+Come descritto, la dimensione LTO_INDEX indica [anche] quanto una cultura valorizzi la educazione moderna come preparazione per il futuro.
+
+La domanda alla quale andremo a risponde in questo punto è la seguente 
+"Se la orientazione a lungo termine include lo studio, persistenza ed innovazione come basi allora ogni cultura,in base al LTO_INDEX, avrà una preferenza verso i lavori del settore terzario (Service) ?"
+
+
+
+
+
+
+(N.B. settore primario,secondario e terziari sono indicati,rispettivamente,dalle colonne Agriculture,Industry,Service che hanno dei valori che sommati devono risultare 1)
+es : \ nel caso dell'italia abbiamo rispettivamente A = 0.021, I = 0.291, S = 0.688 (questi valori possono essere intesi, ovviamente, come percentuali)
+
+
+```{r} 
+#CASO 3
+
+#Selezione dei dati necessari dal database di partenza
+type_of_work <- finalc %>% filter(!is.na(LTO_INDEX)) %>% select(Country,Region,LTO_INDEX,Agriculture,Industry,Service) 
+
+#run this for change the type of the 3 collumns Agriculture,Industry,Service ##############################################################################
+type_of_work$Agriculture <- gsub(',','.',type_of_work$Agriculture)
+type_of_work$Industry <- gsub(',','.',type_of_work$Industry)
+type_of_work$Service <- gsub(',','.',type_of_work$Service)
+
+
+type_of_work$Agriculture <- as.numeric(type_of_work$Agriculture)
+type_of_work$Industry <- as.numeric(type_of_work$Industry)
+type_of_work$Service <- as.numeric(type_of_work$Service)
+#ignore#######################################################################################################################
+
+
+```
+
+
+3.1)    VISUALIZZAZIONE DATI
+```{r}
+A <- type_of_work %>% ggplot(aes(LTO_INDEX, Agriculture)) + geom_point(aes(color = Region)) + geom_smooth(color="red")   
+I <- type_of_work %>% ggplot(aes(LTO_INDEX, Industry)) + geom_point(aes(color = Region))+geom_smooth(color="red")   
+S <- type_of_work %>% ggplot(aes(LTO_INDEX, Service)) + geom_point(aes(color = Region)) + geom_smooth(color="red")   
+
+
+  
+  ggarrange(A,I,S,ncol = 1,nrow = 1)
+  
+  
+  
+proof <- type_of_work %>% pivot_longer(Agriculture:Service, names_to = "SECTOR", values_to = "FREQUENCY") 
+  
+
+fig<- plot_ly(x=proof$LTO_INDEX,y=proof$FREQUENCY,z=proof$SECTOR,color = proof$SECTOR)
+
+fig %>% add_markers() %>% layout(scene= list(xaxis = list(title='LTO_INDEX'),yaxis=list(title ='FREQUENCY'),zaxis=list(title = 'SECTOR')))
+```
+Dai 3 grafici notiamo il diverso andamento dell'Agricultura,Industria e Servizi al variare del LTO_INDEX e come possiamo ipotizzare che più LTO_INDEX è alto e più l'agricultura ha una tendenza ad abbassarsi, al contrario i Servizi tendono ad avere un valore più alto 
+(ovviamente se la agricultura si abbassa e i servizi si alzano, la industria rimane invariata visto che la somma dei 3 fattori deve essere uguale a 1)
+
+Da qui possiamo controllare se la ipotesi è corretta 
+
+```{r}
+corr_df <- type_of_work %>% select(LTO_INDEX,Agriculture,Industry,Service) 
+M <- cor(corr_df)
+m <- round(M,3)
+corrplot.mixed(M,lower="number",upper="ellipse")
+
+mod3 <- lm(data=corr_df,Service ~ Agriculture)
+
+
+type_of_work %>% ggplot(aes(Service,Agriculture)) + geom_point(aes(color = Region)) + geom_abline(intercept = mod3$coefficients[1],slope = mod3$coefficients[2],color="red")
+
+
+
+highLTO <- finalc %>% select(Country,LTO_INDEX,Agriculture,Industry,Service) %>% arrange(-LTO_INDEX)
+lowLTO  <- finalc %>% select(Country,LTO_INDEX,Agriculture,Industry,Service) %>% arrange(LTO_INDEX)
+head(highLTO,15)
+head(lowLTO,15)
+
+```
+Dal seguente grafico possiamo confermare le corelazzioni prima esposte infatti nella prima linea notiamo che in primis l'industria ha un coefficente (rispetto al LTO_INDEX) pressochè nullo mentre Agricultura e Servizi hanno stesso valore ma di segno opposto (- per A, + per S) confermando la nostra ipotesi e sopratutto evidenziando : 
+
+1) L'industria rimane tendenzialmente in linea tra diversi stati
+
+2) Se l'Agricultura si abbassa a compensare sono i Servizi 
+
+3) Agricultura ed Industria sono inversamente proporzionali ai Servizi (all'aumentare dei servizi diminuisce INDUSTRIA e AGRICULTURA)
+
+
+
+[APPROFONDIMENTO]
+
+1) INDUSTRIA COME PUNTO DI INCONTRO LAVORATIVO TRA I DIVERSI STATI
+  
+  
+Una azienda che opera nel settore secondario secondo la distribuzione dei dati ha una base di evoluzione che è indifferente da dove è localizzata e da quale cultura viene immersa la realtà dell'azienda che come abbiamo dimostrare non cambia in base alla orientazione a lungo termine della cultura il che vuol dire che come tipo di settore è un settore CROSS-CULTURALE.
+LO non influenza la scelta del settore secondario.
+
+Una delle probabili motivazioni è che il settore secondario funge da collante tra il primo ed il terzo rendendolo un settore fondamentale indipendantemente dal luogo e se la cultura di destinazione ha preferenze sul setttore 1 o 3.
+
+
+2) GENERALMENTE OGNI STATO HA UNA FREQUENZA PRINCIPALE SU SETTORE PRIMARIO O TERZIARIO 
+
+Discorso differente per quanto riguarda il settore primario e terziario dove invece all'aumentare della orientazione a lungo termine della cultura il settore terziario ha una influenza (e quindi evoluzione) più alto rispetto a culture con LTO minore (discorso inverso per il settore primario).
+
+Per una azienda operante nel primo o terzo settore deve avere una rilevanza il fattore LTO_INDEX della cultura nella quale si vuole esportare il business d'azienda 
+
+
+Oltretutto uno dei motivi per la quale il settore primario e terziario si bilancino a vicenda può essere che con l'aumentare dei Servizi molti lavori coperti dal settore Agricultura vengono modernizzati (controllo del raccolto automatizzato, utilizzo di sistemi automatici,ecc..) rendendo necessarie meno persone per svolgere la stessa attività (persone che andranno "perse" al settore primario tendenzialmente si aggiungeranno al settore terziario)
+
+[FINE APPROFONDIMENTO]
+
+
+4)
+
+  QUALI SONO I FATTORI CHE TENDE A CAMBIARE IL NET MIGRATION?
+
+Finora ogni caso trattava 1 DIMENSIONE di hofstede rispetto ad un valore oggettivo che corrisponde ad un fenomeno reale e andavamo a controllare se la DIMENSIONE da noi scelta aveva una corellazione con il valore(/fenomeno) e cercare di trovare probabili cause e conseguenze
+
+
+
+In questo caso invece prenderemo un valore oggettivo e cercheremo di capire rispetto a quale(/quali) dimensione(/dimensioni) il fenomeno varia (ed ovviamente COME varia) 
+
+Il fenomeno preso in questione è il Net Migration che corrisponde alla differenza tra PPL IN - PPL OUT                [PPL=people]
+e in questo studio andremo a vedere quali delle 6 dimensioni sono corellate con il fenomeno (ed in che modo) e in che modo (inversamente/direttamente proporzionale)
+
+4.1)    SETTAGGIO DATAFRAME LOCALE E CORELLATION PLOT 
+
+Fatta questa premessa aggiungo al dataframe locale la colonna GDP (sempre dal dataframe countries_of_the_world), il perchè di questa scelta è che la Net migration è influenzata dai fenomeni che accadono nel contesto in cui la cultura fa parte, come vedremo il GDP sarà uno dei fattori che più è corellato direttamente alla Net migration che però in questo caso di studio verrà affiancato da 1 (o più) dimensione(/i) che combinate dovrebbero darci delle condizioni nella quale prevedere quali culture tendono ad avere un net migration negativo e quali un net migration positivo
+
+
+In seguito vado a creare il la matrice dei coefficenti di corelazione che poi tramite il comando corrplot() andremo a visualizzare tramite un grafico dalla quale potremmo fare delle prime osservazioni
+
+
+[Ho rimosso LTO e IND index perchè non è stata riscontrata nessuna corellazione e per rendere più leggibile ho tolto le informazioni superflue mettendo a schermo direttamente i risultati]
+
+
+[EASTER EGG nella seconda riga possiamo notare la alta corelazzione tra PD_INDEX e GDP dando una conferma ulteriore (alla quale inizialmente neanche avevo pensato) del caso 2]
+```{r}
+### CREATION OF THE DATASET
+net_migration <- finalc %>% select(Country,Region,`Net migration`,PD_INDEX:IND_INDEX,`GDP ($ per capita)`)
+### CHANGE THE TYPE OF THE NET MIGRATION COLLUMN
+net_migration$`Net migration` <- gsub(',','.',net_migration$`Net migration`)
+net_migration$`Net migration`<- as.numeric(net_migration$`Net migration`)
+
+
+
+### CREATION OF MATRIX AND CORELLATION PLOT
+Mnet2.0 <- cor(net_migration %>% select(-Country,-Region,-LTO_INDEX,-IND_INDEX)) 
+corrplot(Mnet2.0,method = "square",type = "upper")
+################################
+attach(net_migration)
+cor(PD_INDEX,`GDP ($ per capita)`)
+```
+Da questo corellation plot possiamo notare inizialmente nella prima linea che come volevasi dimostrare Net migration e Gdp hanno una buona corellazzione (direttamente proporzionale) mentre per quanto riguarda le DIMENSIONI DI HOFSTEDE PD_INDEX e INV_INDEX hanno le seguenti corellazioni
+
+[ovviamente si parla di coefficenti di corellazioni bassi dovuto al fatto che fenomeni di questo tipo non possono basarsi con cosi poche variabili]
+
+PD_INDEX  -----> inversamente proporzionale con la Net Migration -----> all'aumentare di PD il tasso si abbassa sotto lo 0
+INV_INDEX -----> direttamente proporzionale con la Net Migration -----> al diminuire di INV il tasso si abbassa sotto lo 0
+
+inoltre
+
+PD_INDEX -----> inversamente proporzionale con INV_INDEX -----> all'aumentare di PD la dimensione INV dimunuisce
+PD_INDEX -----> inversamente proporzionale con GDP       -----> all'aumentare di PD il GDP dimunuisce
+
+INV_INDEX -----> direttamente proporzionale con il GDP   -----> al diminuire di INV diminuisce il GDP
+
+
+Il tutto crea una concatenazione di effetti che vanno a variare la Net Migration
+
+Partiamo dal MACRO 
+
+Net Migration aumenta all'aumentare del GDP   <--->   meno GDP equivale a una maggioranza di persone emigranti rispetto alle immigranti 
+
+
+a questa affermazione c'è da affiancare che PD e INV sono rispettivamente inversamente e direttamente proporzionale al GDP ed oltretutto all'aumentare di PD (che è inversamente proporzionale a INV) diminuisce INV il che sommato alla equivalenza di prima :
+
+
++ PD = - INV = - GDP = - NET MIGRATION 
+
+[+ PD  = - GDP]
+[- INV = - GDP]
+
+
+
+4.2)    VISUALIZZAZIONE
+
+Ora con queste informazioni in mano vado a visualizzarle per poter dare una prova grafica di tutto cio che abbiamo ipotizzato sopra
+```{r}
+
+### CREATE THE LINEAR MODELS
+modNG <- lm(data = net_migration,`GDP ($ per capita)`~`Net migration`)
+modNP <- lm(data = net_migration,PD_INDEX~`Net migration`)
+modIP <- lm(data = net_migration,INV_INDEX~`Net migration`)
+
+
+### PLOT OF THE 3 FACTOR
+PDPLOT    <- net_migration %>% ggplot(aes(PD_INDEX,`Net migration`)) + geom_point() + geom_smooth(method="lm")
+INVPLOT   <- net_migration %>% ggplot(aes(INV_INDEX,`Net migration`)) + geom_point() + geom_smooth(method="lm")
+PDINVPLOT <- net_migration %>% ggplot(aes(PD_INDEX,INV_INDEX)) + geom_point() + geom_smooth(method="lm")
+PDGDPLOT  <- net_migration %>% ggplot(aes(PD_INDEX,`GDP ($ per capita)`)) + geom_point() + geom_smooth(method="lm")
+INVGDPLOT <- net_migration %>% ggplot(aes(INV_INDEX,`GDP ($ per capita)`)) + geom_point() + geom_smooth(method="lm")
+GDPPLOT   <- net_migration %>% ggplot(aes(`GDP ($ per capita)`,`Net migration`)) + geom_point() + geom_smooth(method="lm")
+
+
+ggarrange(PDPLOT,INVPLOT,GDPPLOT,nrow=1)
+#################
+```
+
+Ora come prova finale non ci resta che visualizzare gli stati in ordine crescente di Net Migration e visualizzare se davvero gli stati con una net migration bassa sono (generalmente) caratterizzati da un PD_INDEX alto, un INV_INDEX basso, quindi un GDP basso (stessa cosa per le singole regioni se si vuole pensare al macro)
+
+```{r}
+
+### SINGLE COUNTRY
+net_migration %>% select(Country,`Net migration`,`GDP ($ per capita)`,PD_INDEX,INV_INDEX) %>% arrange(`Net migration`) 
+
+### SINGLE REGION
+net_migration %>% select(Country,Region,`Net migration`,`GDP ($ per capita)`,PD_INDEX,INV_INDEX) %>% arrange(`Net migration`) %>% 
+                  group_by(Region) %>% 
+                  summarise(Net = mean(`Net migration`),gdp = mean(`GDP ($ per capita)`),PD = mean(PD_INDEX),INV = mean(INV_INDEX)) %>% 
+                  arrange(Net)
+
+```
+Tutto cio va a confermare quello che si era visualizzato in partenza mettendo in risalto le caratteristiche culturali (tramite le dimesnioni di hofstede) che influenzano la Net migration e in che modo 
+
+(esempio)
+Il che potrebbe servire per la progettazione di un sistema lavorativo all'interno di una azienda che fa parte di uno stato con un net migration alto (quindi più persone entranti di quelle uscenti) per poter operare con efficenza ed efficacia anche con lavoratori immigranti (essendo che in questi stati il tasso è molto alto) caratterizzati da un PD alto (ad esempio si potrebbe pensare ad un ambiente lavorativo più orizzontale) ed un INV basso (implementazione del team-working rispetto al solo-working) 
