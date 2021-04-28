@@ -2,7 +2,7 @@
 My first data science project based on https://www.hofstede-insights.com/country-comparison/
 
 
-"DATA SCRAP"  ---> Directory containing "data_scrap_final.py" with all the python code anb comments explaining the workflow of the software
+"DATA SCRAP"  ---> Directory containing "data_scrap_final.py" with all the python code and comments explaining the workflow of the software
 
 "DataFrame"   ---> Directory containing all the DataFrame I used for the study
 
