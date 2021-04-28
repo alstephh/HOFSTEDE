@@ -6,7 +6,7 @@ My first data science project based on https://www.hofstede-insights.com/country
 
 "DataFrame"   ---> Directory containing all the DataFrame I used for the study
 
-"PRESENTAION" ---> Directory containing the HTML presentation (made in markdown) with directory for images and widget  [this is the final presentation]
+"PRESENTATION" ---> Directory containing the HTML presentation (made in markdown) with directory for images and widget  [this is the final presentation]
 
 "Introduction_to_project" ---> A presentaion explaining the work process I used, the initial analysis and how I create the "progetto.csv"
 
